@@ -5,7 +5,6 @@ import os
 
 from config.config import LOG_LEVEL, LOG_FORMAT, LOG_DATE_FORMAT
 
-
 def setup_logger(name="sports_platform_notifier"):
     """
     Настройка логирования для приложения
@@ -16,6 +15,7 @@ def setup_logger(name="sports_platform_notifier"):
     Returns:
         Настроенный объект логгера
     """
+
     logger = logging.getLogger(name)
 
     level = getattr(logging, LOG_LEVEL.upper(), logging.INFO)
@@ -35,14 +35,13 @@ def setup_logger(name="sports_platform_notifier"):
 
     file_handler = RotatingFileHandler(
         os.path.join(logs_dir, f"{name}.log"),
-        maxBytes=10 * 1024 * 1024,  # 10 MB
+        maxBytes=10 * 1024 * 1024,
         backupCount=5
     )
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 
     return logger
-
 
 def get_logger(name=None):
     """

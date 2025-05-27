@@ -208,7 +208,8 @@ class ApiClient:
         Returns:
             Результат операции
         """
-        return await self._make_request("POST", f"invitations/team/{invitation_id}/accept")
+        result = await self._make_request("POST", f"invitations/team/{invitation_id}/accept")
+        return result
 
     async def decline_team_invitation(self, invitation_id: int) -> Dict[str, Any]:
         """
@@ -220,7 +221,8 @@ class ApiClient:
         Returns:
             Результат операции
         """
-        return await self._make_request("POST", f"invitations/team/{invitation_id}/decline")
+        result = await self._make_request("POST", f"invitations/team/{invitation_id}/decline")
+        return result
 
     async def accept_committee_invitation(self, invitation_id: int) -> Dict[str, Any]:
         """
@@ -232,7 +234,8 @@ class ApiClient:
         Returns:
             Результат операции
         """
-        return await self._make_request("POST", f"invitations/committee/{invitation_id}/accept")
+        result = await self._make_request("POST", f"invitations/committee/{invitation_id}/accept")
+        return result
 
     async def decline_committee_invitation(self, invitation_id: int) -> Dict[str, Any]:
         """
@@ -244,7 +247,8 @@ class ApiClient:
         Returns:
             Результат операции
         """
-        return await self._make_request("POST", f"invitations/committee/{invitation_id}/decline")
+        result = await self._make_request("POST", f"invitations/committee/{invitation_id}/decline")
+        return result
 
     async def get_user_invitations(self, user_id: int, type: str = "all") -> List[Dict[str, Any]]:
         """

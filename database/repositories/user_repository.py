@@ -85,7 +85,6 @@ class UserRepository:
             with get_db_session() as session:
                 user = session.query(User).filter(User.telegram_id == telegram_id).first()
                 if user:
-                    # Создаем словарь с нужными атрибутами пользователя
                     return {
                         "id": user.id,
                         "phone_number": user.phone_number,
@@ -113,14 +112,11 @@ class UserRepository:
         """
         try:
             with get_db_session() as session:
-                # Сначала проверяем, существует ли пользователь с таким telegram_id
                 existing_user = session.query(User).filter(User.telegram_id == telegram_id).first()
                 if existing_user:
-                    # Если такой пользователь уже есть, очищаем его telegram_id
                     existing_user.telegram_id = None
                     session.flush()
 
-                # Теперь находим пользователя по номеру телефона и обновляем telegram_id
                 user = session.query(User).filter(User.phone_number == phone_number).first()
                 if user:
                     user.telegram_id = telegram_id
@@ -145,7 +141,6 @@ class UserRepository:
                     User.telegram_id.isnot(None)
                 ).all()
 
-                # Преобразуем объекты User в словари
                 result = []
                 for user in users:
                     result.append({
@@ -177,11 +172,9 @@ class UserRepository:
         """
         try:
             with get_db_session() as session:
-                # Проверяем, существует ли пользователь с таким telegram_id
                 if telegram_id:
                     existing_user = session.query(User).filter(User.telegram_id == telegram_id).first()
                     if existing_user:
-                        # Если такой пользователь уже есть, очищаем его telegram_id
                         existing_user.telegram_id = None
                         session.flush()
 
@@ -194,7 +187,6 @@ class UserRepository:
                 session.add(user)
                 session.flush()
 
-                # Возвращаем словарь с данными пользователя
                 return {
                     "id": user.id,
                     "phone_number": user.phone_number,

@@ -1,5 +1,5 @@
-import logging
 import re
+import logging
 from aiogram import Dispatcher, types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
@@ -12,21 +12,21 @@ from bot.messages.templates import (
     PHONE_LINKED_MESSAGE,
     PHONE_NOT_FOUND_MESSAGE,
     PHONE_LINK_ERROR_MESSAGE,
-    INVALID_PHONE_FORMAT_MESSAGE
+    INVALID_PHONE_FORMAT_MESSAGE,
+    TEAM_INVITATION_MESSAGE,
+    COMMITTEE_INVITATION_MESSAGE
 )
 from bot.keyboards.keyboards import (
     get_phone_keyboard,
     get_start_keyboard,
     get_help_keyboard,
-    get_match_actions_keyboard
+    get_invitation_keyboard
 )
 
 logger = get_logger("user_handler")
 
-
 class UserStates(StatesGroup):
     waiting_for_phone = State()
-
 
 PHONE_REGEX = r'^(\+7|7|8)[0-9]{10}$'
 
@@ -80,7 +80,6 @@ def register_user_handlers(dp: Dispatcher):
 
         if phone_number.startswith('+'):
             phone_number = phone_number[1:]
-
         await process_phone_number(message, phone_number, state)
 
     @dp.message_handler(state=UserStates.waiting_for_phone)
@@ -118,6 +117,8 @@ def register_user_handlers(dp: Dispatcher):
             "Выберите раздел помощи:",
             reply_markup=get_help_keyboard()
         )
+
+        print("Отправлено меню помощи с клавиатурой")
 
     @dp.message_handler(lambda message: message.text == "Мои матчи")
     async def my_matches(message: types.Message):
@@ -176,21 +177,19 @@ def register_user_handlers(dp: Dispatcher):
         Args:
             message: Сообщение от пользователя
         """
-        user = UserRepository.get_by_telegram_id(str(message.from_user.id))
+        telegram_id = str(message.from_user.id)
+        user = UserRepository.get_by_telegram_id(telegram_id)
+
         if not user:
             await message.answer(
                 "Ваш аккаунт не привязан к боту. Отправьте /start для привязки."
             )
             return
 
-        try:
-            user_id = user.id if hasattr(user, 'id') else user.get('id')
+        await message.answer("Ищем ваши приглашения...")
 
-            if not user_id:
-                await message.answer(
-                    "Не удалось определить ID пользователя. Пожалуйста, попробуйте заново привязать аккаунт, отправив /start."
-                )
-                return
+        try:
+            user_id = user['id'] if isinstance(user, dict) else user.id
 
             invitations = await api_client.get_user_invitations(user_id)
 
@@ -198,7 +197,7 @@ def register_user_handlers(dp: Dispatcher):
                 await message.answer("У вас нет активных приглашений.")
                 return
 
-            has_sent_invitations = False
+            await message.answer(f"📨 Найдено {len(invitations)} приглашений:")
 
             for invitation in invitations:
                 if invitation['type'] == 'team':
@@ -210,10 +209,9 @@ def register_user_handlers(dp: Dispatcher):
                             sport_type=invitation.get('sport', ''),
                             captain_name=invitation.get('inviter_name', '')
                         ),
-                        reply_markup=markup
+                        reply_markup=markup,
+                        parse_mode="Markdown"
                     )
-                    has_sent_invitations = True
-
                 elif invitation['type'] == 'committee':
                     markup = get_invitation_keyboard(invitation['invitation_id'], "committee")
 
@@ -222,17 +220,12 @@ def register_user_handlers(dp: Dispatcher):
                             committee_name=invitation.get('committee_name', ''),
                             inviter_name=invitation.get('inviter_name', '')
                         ),
-                        reply_markup=markup
+                        reply_markup=markup,
+                        parse_mode="Markdown"
                     )
-                    has_sent_invitations = True
-
-            if not has_sent_invitations:
-                await message.answer("У вас нет активных приглашений.")
 
         except Exception as e:
-            user_id_str = str(user.id if hasattr(user, 'id') else user.get('id', 'unknown'))
-            logger.error(f"Ошибка при получении приглашений пользователя {user_id_str}: {e}")
-
+            logger.error(f"Ошибка при получении приглашений пользователя {telegram_id}: {e}")
             await message.answer(
                 "Произошла ошибка при получении информации о приглашениях. Пожалуйста, попробуйте позже."
             )
@@ -314,13 +307,10 @@ def register_user_handlers(dp: Dispatcher):
             return
 
         try:
-            user_id = user.id if hasattr(user, 'id') else user.get('id')
-
-            if not user_id:
-                await message.answer(
-                    "Не удалось определить ID пользователя. Пожалуйста, попробуйте заново привязать аккаунт, отправив /start."
-                )
-                return
+            user_id = user.id if hasattr(user, 'id') else user['id'] if isinstance(user,
+                                                                                   dict) and 'id' in user else None
+            if user_id is None:
+                raise ValueError("Не удалось определить ID пользователя")
 
             teams = await api_client.get_user_teams(user_id)
 
@@ -331,101 +321,28 @@ def register_user_handlers(dp: Dispatcher):
             response = "👥 Ваши команды:\n\n"
 
             for team in teams:
-                response += f"*{team['name']}*\n"
-                response += f"⚽ Вид спорта: {team['sport']}\n"
+                response += f"<b>{team.get('name', 'Без названия')}</b>\n"
+                response += f"⚽ Вид спорта: {team.get('sport', 'Не указан')}\n"
 
                 if team.get('is_captain', False):
                     response += "👑 Вы капитан этой команды\n"
 
+                team_id = team.get('id', team.get('team_id', ''))
+                if team_id:
+                    response += f"Для просмотра подробной информации: /team_{team_id}\n"
+
                 response += "\n"
 
-            response += "Чтобы просмотреть подробную информацию о команде, отправьте /team_<id>, например /team_123"
+            response += "Чтобы просмотреть подробную информацию о команде, отправьте /team_ID (например, /team_123)"
 
-            await message.answer(response, parse_mode="Markdown")
+            await message.answer(response, parse_mode="HTML")
 
         except Exception as e:
-            user_id_str = str(user.id if hasattr(user, 'id') else user.get('id', 'unknown'))
-            logger.error(f"Ошибка при получении команд пользователя {user_id_str}: {e}")
-
+            logger.error(f"Ошибка при получении команд пользователя: {e}")
             await message.answer(
-                "Произошла ошибка при получении информации о командах. Пожалуйста, попробуйте позже."
+                "Произошла ошибка при получении информации о командах. Пожалуйста, попробуйте позже.",
+                reply_markup=get_start_keyboard()
             )
-
-    @dp.callback_query_handler(lambda c: c.data == 'help_about')
-    async def help_about(callback_query: types.CallbackQuery):
-        """
-        Обработчик запроса информации о боте
-
-        Args:
-            callback_query: Запрос от кнопки
-        """
-        await callback_query.answer()
-        await callback_query.message.answer(
-            "О боте:\n\n"
-            "Этот бот предназначен для отправки уведомлений пользователям онлайн-платформы "
-            "для поиска и управления любительскими спортивными соревнованиями.\n\n"
-            "Через этот бот вы будете получать актуальную информацию о чемпионатах, "
-            "матчах и командах, в которых вы участвуете."
-        )
-
-    @dp.callback_query_handler(lambda c: c.data == 'help_notification_types')
-    async def help_notification_types(callback_query: types.CallbackQuery):
-        """
-        Обработчик запроса информации о типах уведомлений
-
-        Args:
-            callback_query: Запрос от кнопки
-        """
-        await callback_query.answer()
-        await callback_query.message.answer(
-            "Типы уведомлений:\n\n"
-            "• Заявки на участие в чемпионатах\n"
-            "• Отмена или отклонение заявок\n"
-            "• Отмена или завершение чемпионатов\n"
-            "• Назначение новых матчей\n"
-            "• Перенос матчей\n"
-            "• Результаты прохождения в плей-офф\n"
-            "• Напоминания о матчах\n"
-            "• Новые интересные чемпионаты\n"
-            "• Сообщения от оргкомитетов\n"
-            "• Приглашения в команды\n"
-            "• Приглашения в оргкомитеты"
-        )
-
-    @dp.callback_query_handler(lambda c: c.data == 'help_change_phone')
-    async def help_change_phone(callback_query: types.CallbackQuery):
-        """
-        Обработчик запроса информации о смене номера телефона
-
-        Args:
-            callback_query: Запрос от кнопки
-        """
-        await callback_query.answer()
-        await callback_query.message.answer(
-            "Как привязать другой номер телефона:\n\n"
-            "1. Отправьте команду /changephone\n"
-            "2. Введите новый номер телефона или отправьте контакт\n"
-            "3. Ваш аккаунт будет привязан к новому номеру телефона\n\n"
-            "Обратите внимание, что номер телефона должен быть зарегистрирован в системе."
-        )
-
-    @dp.callback_query_handler(lambda c: c.data == 'help_support')
-    async def help_support(callback_query: types.CallbackQuery):
-        """
-        Обработчик запроса информации о поддержке
-
-        Args:
-            callback_query: Запрос от кнопки
-        """
-        await callback_query.answer()
-        await callback_query.message.answer(
-            "Связаться с поддержкой:\n\n"
-            "По всем вопросам, связанным с работой бота или платформы, "
-            "пожалуйста, обращайтесь по адресу электронной почты:\n"
-            "support@sports-platform.ru\n\n"
-            "Или позвоните нам по телефону:\n"
-            "+7 (800) 123-45-67"
-        )
 
     @dp.message_handler(commands=['changephone'])
     async def cmd_change_phone(message: types.Message):
@@ -516,7 +433,7 @@ def register_user_handlers(dp: Dispatcher):
                 reply_markup=get_phone_keyboard()
             )
 
-    @dp.message_handler(lambda message: message.text.startswith('/team_'))
+    @dp.message_handler(lambda message: re.match(r'/team_?\d+', message.text))
     async def team_details(message: types.Message):
         """
         Обработчик запроса информации о конкретной команде
@@ -532,35 +449,60 @@ def register_user_handlers(dp: Dispatcher):
             return
 
         try:
-            team_id = int(message.text.split('_')[1])
+            wait_message = await message.answer("Загружаем информацию о команде...")
+
+            command_text = message.text
+            if '_' in command_text:
+                team_id = int(command_text.split('_')[1])
+            else:
+                team_id = int(command_text[5:])
+
+            user_id = user.id if hasattr(user, 'id') else user['id'] if isinstance(user,
+                                                                                   dict) and 'id' in user else None
+            if user_id is None:
+                raise ValueError("Не удалось определить ID пользователя")
 
             team = await api_client.get_team_details(team_id)
 
-            if not team:
+            if not team or not isinstance(team, dict):
                 await message.answer("Команда не найдена или у вас нет доступа к ней.")
                 return
 
-            response = f"👥 *{team['name']}*\n\n"
-            response += f"⚽ Вид спорта: {team['sport']}\n"
-            response += f"👨‍👩‍👧‍👦 Участников: {team['count_member']}\n"
-            response += f"🏆 Побед: {team.get('wins', 0)}\n"
-            response += f"❌ Поражений: {team.get('loss', 0)}\n\n"
+            name = team.get('name', 'Без названия')
+            sport = team.get('sport', 'Не указан')
+            count_member = team.get('count_member', 0)
+            wins = team.get('wins', 0)
+            loss = team.get('loss', 0)
+            members = team.get('members', [])
 
-            response += "👥 *Состав команды:*\n"
-            for member in team.get('members', []):
-                name = f"{member['first_name']} {member['last_name']}"
-                if member.get('is_captain', False):
-                    name += " 👑"
-                response += f"- {name}\n"
+            response = f"👥 <b>{name}</b>\n\n"
+            response += f"⚽ Вид спорта: {sport}\n"
+            response += f"👨‍👩‍👧‍👦 Участников: {count_member}\n"
+            response += f"🏆 Побед: {wins}\n"
+            response += f"❌ Поражений: {loss}\n\n"
 
-            await message.answer(response, parse_mode="Markdown")
+            if members:
+                response += "<b>Состав команды:</b>\n"
+                for member in members:
+                    member_name = f"{member.get('first_name', '')} {member.get('last_name', '')}"
+                    if member.get('is_captain', False):
+                        member_name += " 👑"
+                    response += f"- {member_name}\n"
 
-        except ValueError:
-            await message.answer("Неверный формат команды. Используйте /team_<id>, например /team_123")
+            await message.answer(response, parse_mode="HTML")
+
         except Exception as e:
-            user_id_str = str(user.id if hasattr(user, 'id') else user.get('id', 'unknown'))
-            logger.error(f"Ошибка при получении информации о команде для пользователя {user_id_str}: {e}")
+            logger.error(f"Ошибка при получении информации о команде: {e}")
+
+            error_message = "Произошла ошибка при получении информации о команде."
+
+            if hasattr(e, 'response') and hasattr(e.response, 'status'):
+                if e.response.status == 404:
+                    error_message = "Команда не найдена."
+                elif e.response.status == 403:
+                    error_message = "У вас нет доступа к информации об этой команде."
 
             await message.answer(
-                "Произошла ошибка при получении информации о команде. Пожалуйста, попробуйте позже."
+                f"{error_message} Пожалуйста, попробуйте позже.",
+                reply_markup=get_start_keyboard()
             )

@@ -45,7 +45,6 @@ def init_db():
     Инициализирует базу данных и создает все необходимые таблицы.
     """
     try:
-        # Создаем все таблицы
         Base.metadata.create_all(engine)
         logger.info("База данных успешно инициализирована")
     except Exception as e:

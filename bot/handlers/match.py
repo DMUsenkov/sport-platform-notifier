@@ -47,7 +47,6 @@ def register_match_handlers(dp: Dispatcher):
         async with state.proxy() as data:
             data['match_id'] = match_id
             data['team_id'] = team_id
-
         await callback_query.message.answer(
             "Пожалуйста, укажите причину отклонения участия в матче:"
         )

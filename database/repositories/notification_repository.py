@@ -51,29 +51,36 @@ class NotificationRepository:
                     metadata_json=metadata_json,
                     scheduled_for=scheduled_for
                 )
+
                 session.add(notification)
                 session.flush()
+
                 return notification
         except SQLAlchemyError as e:
             logger.error(f"Ошибка при создании уведомления: {e}")
             return None
 
     @staticmethod
-    def get_pending_notifications(limit: int = 100) -> List[Notification]:
+    def get_pending_notifications(limit: int = 100) -> List[Dict[str, Any]]:
         """
-        Получение списка неотправленных уведомлений, которые нужно отправить
+        Получение списка неотправленных уведомлений с данными пользователей
 
         Args:
             limit: Максимальное количество уведомлений
 
         Returns:
-            Список уведомлений
+            Список словарей с уведомлениями и данными пользователей
         """
         try:
             with get_db_session() as session:
+                from datetime import datetime
+                from sqlalchemy import and_, or_
+
                 now = datetime.now()
 
-                return session.query(Notification).join(User).filter(
+                results = session.query(Notification, User).join(
+                    User, Notification.user_id == User.id
+                ).filter(
                     and_(
                         Notification.is_sent == False,
                         User.telegram_id.isnot(None),
@@ -84,6 +91,30 @@ class NotificationRepository:
                         )
                     )
                 ).order_by(Notification.created_at).limit(limit).all()
+
+                notifications = []
+                for notification, user in results:
+                    notifications.append({
+                        'notification': {
+                            'id': notification.id,
+                            'user_id': notification.user_id,
+                            'type': notification.type,
+                            'title': notification.title,
+                            'content': notification.content,
+                            'metadata_json': notification.metadata_json,
+                            'created_at': notification.created_at,
+                            'scheduled_for': notification.scheduled_for
+                        },
+                        'user': {
+                            'id': user.id,
+                            'telegram_id': user.telegram_id,
+                            'first_name': user.first_name,
+                            'last_name': user.last_name,
+                            'is_active': user.is_active
+                        }
+                    })
+
+                return notifications
         except SQLAlchemyError as e:
             logger.error(f"Ошибка при получении неотправленных уведомлений: {e}")
             return []
@@ -125,9 +156,9 @@ class NotificationRepository:
         try:
             with get_db_session() as session:
                 from datetime import timedelta
+
                 cutoff_date = datetime.now() - timedelta(days=days)
 
-                # Получаем количество уведомлений для удаления
                 count = session.query(Notification).filter(
                     and_(
                         Notification.is_sent == True,
@@ -135,7 +166,6 @@ class NotificationRepository:
                     )
                 ).count()
 
-                # Удаляем уведомления
                 session.query(Notification).filter(
                     and_(
                         Notification.is_sent == True,
@@ -166,7 +196,6 @@ class NotificationRepository:
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-
             try:
                 matches = loop.run_until_complete(api_client.get_upcoming_matches(days=2))
 
@@ -182,7 +211,6 @@ class NotificationRepository:
                             tomorrow_matches.append(match)
 
                 notifications_count = 0
-
                 with get_db_session() as session:
                     for match in tomorrow_matches:
                         team1 = loop.run_until_complete(api_client.get_team_details(match['team1_id']))
@@ -191,7 +219,6 @@ class NotificationRepository:
                         for team, opponent in [(team1, team2), (team2, team1)]:
                             for member in team.get('members', []):
                                 user = session.query(User).filter(User.id == member['user_id']).first()
-
                                 if user and user.is_active and user.telegram_id:
                                     metadata = {
                                         'championship_name': match.get('tournament_name', ''),
@@ -209,16 +236,13 @@ class NotificationRepository:
                                         content=f"Завтра у вашей команды матч в {match.get('time', '')}",
                                         metadata_json=json.dumps(metadata)
                                     )
-
                                     session.add(notification)
                                     notifications_count += 1
 
                 logger.info(f"Создано {notifications_count} напоминаний о матчах")
                 return notifications_count
-
             finally:
                 loop.close()
-
         except Exception as e:
             logger.error(f"Ошибка при создании напоминаний о матчах: {e}")
             return 0

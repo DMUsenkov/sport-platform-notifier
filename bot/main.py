@@ -12,6 +12,7 @@ from bot.handlers.user import register_user_handlers
 from bot.handlers.notification import register_notification_handlers, process_pending_notifications
 from bot.handlers.match import register_match_handlers
 from bot.handlers.championship import register_championship_handlers
+from bot.handlers.callback_handlers import register_callback_handlers
 from database.repositories.notification_repository import NotificationRepository
 
 logger = setup_logger("bot")
@@ -20,6 +21,7 @@ bot = Bot(token=TELEGRAM_BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
+register_callback_handlers(dp)
 register_user_handlers(dp)
 register_notification_handlers(dp)
 register_match_handlers(dp)
@@ -56,7 +58,6 @@ async def on_startup(dispatcher):
         dispatcher: Диспетчер Aiogram
     """
     global background_tasks_running
-
     try:
         init_db()
         logger.info("База данных инициализирована")
@@ -79,7 +80,6 @@ async def on_shutdown(dispatcher):
         dispatcher: Диспетчер Aiogram
     """
     global background_tasks_running
-
     try:
         background_tasks_running = False
         logger.info("Фоновые задачи остановлены")
@@ -98,5 +98,6 @@ if __name__ == '__main__':
         dp,
         on_startup=on_startup,
         on_shutdown=on_shutdown,
-        skip_updates=True
+        skip_updates=True,
+        allowed_updates=['message', 'callback_query']
     )

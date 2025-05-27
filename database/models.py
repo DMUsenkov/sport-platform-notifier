@@ -6,18 +6,20 @@ from datetime import datetime
 
 from database.connection import Base
 
+
 class NotificationType(enum.Enum):
-    TEAM_APPLICATION = "team_application"                # Отправка заявки на чемпионат
-    APPLICATION_CANCEL = "application_cancel"            # Отмена/отклонение заявки
-    CHAMPIONSHIP_CANCEL = "championship_cancel"          # Отмена/завершение чемпионата
-    NEW_MATCH = "new_match"                              # Назначение нового матча
-    MATCH_RESCHEDULE = "match_reschedule"                # Перенос матча
-    PLAYOFF_RESULT = "playoff_result"                    # Проход/непроход в плей-офф
-    MATCH_REMINDER = "match_reminder"                    # Напоминание о матче
-    NEW_CHAMPIONSHIP = "new_championship"                # Новые интересные чемпионаты
-    COMMITTEE_MESSAGE = "committee_message"              # Сообщения от оргкомитета
-    TEAM_INVITATION = "team_invitation"                  # Приглашение в команду
-    COMMITTEE_INVITATION = "committee_invitation"        # Приглашение в оргкомитет
+    TEAM_APPLICATION = "team_application"
+    APPLICATION_CANCEL = "application_cancel"
+    CHAMPIONSHIP_CANCEL = "championship_cancel"
+    NEW_MATCH = "new_match"
+    MATCH_RESCHEDULE = "match_reschedule"
+    PLAYOFF_RESULT = "playoff_result"
+    MATCH_REMINDER = "match_reminder"
+    NEW_CHAMPIONSHIP = "new_championship"
+    COMMITTEE_MESSAGE = "committee_message"
+    TEAM_INVITATION = "team_invitation"
+    COMMITTEE_INVITATION = "committee_invitation"
+
 
 class User(Base):
     """Модель пользователя системы"""
@@ -36,6 +38,7 @@ class User(Base):
 
     def __repr__(self):
         return f"<User {self.first_name} {self.last_name}>"
+
 
 class Notification(Base):
     """Модель уведомления"""
